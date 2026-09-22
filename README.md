@@ -23,3 +23,14 @@ them. For example, with Claude Code, Cursor, or a similar coding
 assistant open in your Lean project's directory, paste the contents of
 `LeanPerformanceAudit.txt` as your prompt (or ask the assistant to read the
 file if you've copied it into your project) and let it run the audit.
+
+## Contributing
+
+Contributing (submitting changes to the audit prompt) is limited to this
+project's contributors. Anyone can open or report an issue, though —
+if you hit a problem with the prompt or have a suggestion, please file an
+issue.
+
+By contributing to this project, you agree that your contribution is
+automatically licensed under this project's license (see [LICENSE](LICENSE)),
+with no separate agreement required.
