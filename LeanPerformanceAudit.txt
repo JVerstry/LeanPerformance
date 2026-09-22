@@ -1,0 +1,355 @@
+You are auditing a Lean project to find concrete, high-value ways to speed
+up its build. Follow the process below, then produce a report. Ground every
+claim you make in this project's own measurements — do not apply any
+finding from this prompt without checking it actually holds here first.
+
+The person reading your report knows Lean and mathematics but is not a
+software engineer — they don't necessarily know what a "hash," a "kernel
+defeq check," or "OS process parallelism" means. For every recommendation,
+in plain language: (1) what to actually do, (2) why it helps — the
+underlying mechanism, explained simply, not just asserted — and (3) roughly
+how much it is expected to help, based on what you measured or, failing
+that, on the ranges noted in this prompt (clearly marked as unverified
+estimates, not this project's own numbers). Don't assume they know Lean
+internals (the module system, `.olean` files, elaboration) going in —
+introduce each concept in a sentence before relying on it.
+
+======================================================================
+Priority — what to check and recommend first
+======================================================================
+
+Findings vary enormously in impact and in how disruptive they are to apply.
+Investigate and present them in this order, and say so explicitly in the
+report (a numbered, prioritized list of recommendations, not a flat dump):
+
+1. **The module system migration (section 2).** This is normally the
+   single biggest lever, since it removes most of the doc-comment/
+   proof-edit rebuild cascade project-wide. It is also structural and
+   somewhat invasive, so recommend it first but flag it as a bigger,
+   one-time undertaking — best done deliberately, bottom-up, not mixed
+   into an unrelated change.
+   - **Mandatory order if adopted**: migration must proceed bottom-up
+     along the import graph (a module can only import other modules), and
+     must be verified in the specific sequence described in section 2
+     (recompute levels fresh before each batch, sanity-check each batch
+     before writing it). Doing this out of order is the one recommendation
+     in this prompt that can silently corrupt the build rather than merely
+     under-deliver — call this out clearly if you recommend it.
+2. **File-splitting for parallelism (section 3)**, but only after
+   confirming with a profiler which specific file(s) are actually slow —
+   never recommend splitting a file you have not profiled. This depends on
+   free CPU cores and free RAM on the machine that will run the build; say
+   so, and check both before recommending it.
+3. **Elaboration/tactic-level fixes (section 4)** for the specific slow
+   declarations the profiler points to. These are the most surgical and
+   lowest-risk recommendations (they change a handful of lines, not the
+   project's structure), but only pay off for the file(s) actually shown
+   to be slow — don't apply them speculatively across the whole project.
+4. **Tooling and workflow suggestions (section 5)** — lowest risk, but also
+   generally the smallest individual payoff; worth doing but not worth
+   leading the report with.
+
+Within each section, still rank individual findings by expected impact
+(using this project's own measured numbers wherever you have them), and
+mark clearly which recommendations depend on an earlier one already being
+done (e.g. a file-split plan computed before a module-system migration may
+need to be recomputed after, since the migration changes what actually
+needs to rebuild).
+
+======================================================================
+0. Before you start: identify the project
+======================================================================
+
+- Confirm this is a Lake project (`lakefile.lean` or `lakefile.toml`,
+  `lean-toolchain`). Note the pinned toolchain version — some levers below
+  (e.g. a Lake job-count flag) are version-dependent; check what this
+  toolchain actually supports instead of assuming.
+- Note whether the project depends on Mathlib (or another large library).
+  Mathlib/Batteries import overhead dominates the fixed per-file cost (see
+  section 2) and is not something this project's own code can reduce.
+- Note the machine you're measuring on (core/thread count, RAM, whether
+  it's shared/loaded). Record this in the report: timings are only
+  meaningful relative to the machine and load they were taken under.
+
+======================================================================
+1. Measurement discipline (read this before trusting any number)
+======================================================================
+
+- **Timings on a shared or loaded machine vary widely between runs of the
+  identical file** — swings of 2x are normal, more under memory pressure.
+  Only large differences (not 10-20%) are safe to draw conclusions from.
+  Re-measure anything a recommendation will hinge on, ideally on an idle
+  machine with a few GB of RAM actually free.
+- **Never predict what a change will cost or save from import structure
+  alone — compute it.** "This file imports something from directory X" is
+  not the same as "this file imports the one slow file in directory X".
+  Build the actual reverse-dependency closure from `import` lines, and
+  check `.olean` timestamps after a build to see what really rebuilt.
+- **A killed build can force a spurious rebuild later**, even if the file
+  is restored byte-for-byte: Lake compares against the last *successful*
+  recorded trace, not against "this exact content was built successfully
+  once." Don't read a rebuild after a restore as evidence the content
+  matters when the build itself was interrupted.
+- Profile before diagnosing: `lake env lean -Dprofiler=true
+  -Dprofiler.threshold=<ms> File.lean` shows which *phase* (import, simp,
+  tactic execution, typeclass inference, ...) dominates a slow file, cheaply,
+  before attributing cost to any specific declaration. Add `--json` to get
+  one message per event with a source position for finer attribution.
+  - **Attribution pitfall**: a profiler message reports at the position of
+    the *start* of the command it profiles (e.g. a doc comment), not its
+    end. Attribute each message to the first declaration starting *at or
+    after* its line — not the nearest declaration before it — or cost gets
+    misattributed to the wrong (often much smaller) neighboring
+    declaration.
+- **`lake env lean file.lean` and `lake env` both carry several seconds of
+  fixed overhead per invocation** — fine once, ruinous when timing many
+  files individually. Fetch the search path once
+  (`lake env printenv LEAN_PATH`), then invoke `lean`/`lean.exe` directly
+  with that env var set for every subsequent timing call.
+- **Prototype a fix on a small, fast scratch file first**, not on the real
+  multi-thousand-line file: `import` the already-built module and test a
+  handful of representative cases (one per distinct shape the real file
+  contains). This turns a slow edit-rebuild-diagnose loop into a fast one.
+  Make sure the probe is *complete* enough to actually test the real claim
+  (e.g. a hand-written partial stand-in for a large `match` is not defeq to
+  the real thing and can make a lemma about it pass or fail for the wrong
+  reason) — a probe that's fast but not representative can send you down a
+  false lead.
+- Attempts to manually control Lake's parallelism (a job-count flag,
+  `LEAN_NUM_THREADS=1`) may or may not be available/useful on this
+  toolchain — check rather than assume; on at least one past version,
+  `LEAN_NUM_THREADS=1` throttled Lake's own scheduler too and serialized
+  everything, making it strictly worse, and no job-count flag existed at
+  all.
+
+======================================================================
+2. Whole-project / whole-file rebuild cost
+======================================================================
+
+Core mechanic to explain and check for in this project:
+
+- **Lake rebuilds by comparing file hashes, not by asking whether the
+  mathematics changed.** In a plain (non-`module`) Lean file, anything that
+  changes the emitted `.olean` — including a doc comment, or any edit that
+  shifts declaration positions — invalidates every direct and transitive
+  importer, and each invalidated file is fully re-elaborated. A `--`
+  line comment that doesn't shift any line is free; a `/-- -/` doc comment
+  never is, in an ordinary file.
+- Check whether the project already uses **Lean's module system**
+  (`module`, `public import …`, `@[expose] public section`). If not,
+  and the project has files with many importers, this is likely the single
+  highest-leverage structural change available: it stops the rebuild
+  cascade for doc-comment edits and, notably, for changes to an existing
+  theorem's *proof* (not its statement) — only a change that adds a new
+  declaration, changes a `def`'s body, or changes any declaration's *type*
+  still cascades, because those change the file's public surface.
+  - Costs roughly +10% compile time on an ordinary small file if migrated
+    (re-measure on this project); a single declaration with no natural
+    split may cost more (see splitting advice below).
+  - Migration must proceed bottom-up along the import graph — a module can
+    only import modules — and a plain file importing a module still
+    rebuilds on any change to it, so a half-migrated path gains nothing
+    for files still on the "wrong" side of the boundary.
+  - Without `@[expose]`, a definition's body is invisible downstream
+    (`decide`/`unfold`/`simp [def]` on it fails downstream from a plain
+    `public import`) — wrapping a whole file in one blanket
+    `@[expose] public section` first, narrowing later, is a low-effort way
+    to port a file without hunting for exactly which declarations need
+    exposure.
+  - **Watch for `private` declarations** when converting a file already
+    wrapped in `@[expose] public section`: a `private` name referenced
+    *only inside another declaration's tactic proof* is safe (proofs are
+    erased); referenced in a `def`'s exposed *value* or a *theorem's
+    statement/type*, the referenced name must also be non-`private`, or
+    you get `unknown identifier`. Recognize the symptom: once one
+    identifier fails to resolve, the elaborator inserts `sorry` to keep
+    checking the rest of the file, so one root cause produces a wall of
+    unrelated-looking `declaration uses 'sorry'` / `this tactic is never
+    executed` warnings below it — fix the one root `private`, not each
+    downstream symptom.
+  - **If migrating in batches by dependency level**: a module's "level" is
+    not a fixed graph property — it shrinks as earlier batches convert its
+    dependencies. Recompute the full level distribution fresh immediately
+    before choosing *each* batch's range; reusing stale numeric boundaries
+    from an earlier computation (even while recomputing each file's own
+    level correctly) can silently skip files whose level fell into an
+    earlier, already-processed range, producing
+    `cannot import non-'module' X from 'module'` errors that look
+    unrelated to what actually changed. Add an explicit pre-flight check:
+    every import of every file about to be converted in this batch must
+    also be in this same batch (already a module), or refuse to proceed.
+- Before a cosmetic edit (typo fix, doc comment, formatting) to any file
+  near the root of the import graph, or with many importers, check its
+  reverse-dependency closure — actually computed (e.g.
+  `grep -rl "import <Module>"` plus transitive closure, or the same
+  information from a build-cost tool, see section 5) — before assuming the
+  edit is cheap. Batch such edits together with a change to the same file
+  that needs the rebuild anyway, or defer them.
+- **The fixed per-file/per-process cost is real and usually dominates an
+  ordinary full rebuild.** An otherwise-empty file that only imports a
+  large library can cost several seconds to tens of seconds: process
+  start-up plus interpreting the library's initializers (environment
+  extensions, linters, attribute handlers). Multiplied across every module
+  in the project, this fixed overhead is often *most* of a from-scratch
+  full rebuild — i.e. most of a full rebuild's time is import/startup
+  overhead, not this project's own proofs. This cuts both ways: splitting
+  files for parallelism (below) pays this cost once per new file, so
+  splitting too finely is a real cost, not free; merging many tiny files
+  is a small win in the other direction.
+
+======================================================================
+3. Splitting large files / proofs for parallelism
+======================================================================
+
+- **Do not split one large proof into many lemmas inside the same file to
+  gain parallelism.** This has been measured *slower*, not faster (threads
+  within one Lean process appear to contend over shared state) — check
+  whether this project has already done this anywhere as an "optimization"
+  that may in fact be a regression.
+- **Splitting across separate files is what actually works**, because Lake
+  compiles independent modules as separate OS processes with no shared
+  memory to contend over. Worthwhile only when there's real machine
+  parallelism (idle cores) and enough free RAM — a parallel job that starts
+  paging can take longer than the unsplit file would have; check available
+  RAM before recommending a fine-grained split, and check actual per-job
+  memory use if this is a concern.
+- **How to choose a split, if recommending one:**
+  - For a file with several genuinely independent heavy declarations (no
+    shared lemma needed by two of them): profile first to find which
+    declarations actually dominate the time, then partition every other
+    declaration by which of those roots transitively needs it — needed by
+    two-or-more roots → a shared base file; needed by exactly one root →
+    that root's own file; needed by none → a trailing file. Compute this
+    partition from the source (dependency graph of identifiers), don't
+    guess it.
+  - For a file with one enormous declaration and no natural multi-root
+    split: look for real sub-structure to name and split along (e.g. a
+    state set that is secretly a union of independent parts) rather than
+    mechanically chopping the proof.
+- Remember the fixed-cost tradeoff from section 2: each new file pays the
+  process-startup + import cost again, so this is a real cost to weigh
+  against the parallelism gained, not a pure win.
+
+======================================================================
+4. Elaboration / tactic-level time within a single declaration
+======================================================================
+
+Look for these specific patterns, which are cheap to grep for and often
+disproportionately expensive:
+
+- **A default/automatic tactic search that should be a targeted rewrite.**
+  The clearest example: `decreasing_by`/`decreasing_tactic` left at its
+  default can search a large local context (e.g. repeated `assumption`
+  calls, one per recursive call site) at several seconds each, while an
+  explicit tactic using the same facts directly (e.g.
+  `decreasing_by all_goals omega`) can be orders of magnitude faster. More
+  generally: if a file's slow phase (from profiling) doesn't match its
+  visibly complex content, suspect an automatic/default tactic search
+  hiding elsewhere in the file, e.g. in a termination proof.
+- **`show`/unfolding across a non-definitional gap.** `show`-ing into a
+  goal that only needs constructor-level (delta/iota) reduction — unfolding
+  a `match` on a literal/fixed-shape term — is cheap and safe regardless of
+  how large the match is. `show`-ing across a gap that actually needs a
+  *proven lemma* (not definitional unfolding) sends `whnf` trying to
+  brute-force evaluate against an opaque term and can time out outright —
+  raising `maxHeartbeats` does not help because the check may genuinely not
+  terminate in practice. Fix: use the lemma as a real rewrite
+  (`simp only [lemma]`, `rw`), and reserve `show` strictly for the cheap
+  constructor-level cases.
+- **A large concrete term unfolded by the elaborator instead of reasoned
+  about abstractly.** If the project has large concrete programs, tables,
+  or data structures that get unfolded during proof search, check whether
+  proving rewrite lemmas once against *abstract* variables, then marking
+  the concrete term `attribute [irreducible]` and only ever accessing it
+  through its lemma, would avoid repeat unfolding.
+- **A giant `match`/case-analysis re-unfolded inside every one of N proof
+  cases that each need it** costs roughly N times the unfold. Fix: lift the
+  match into its own `def`, prove once that it reduces to the selected arm
+  for the relevant class of scrutinees, then have each case reuse that one
+  proof via a `show <selected arm> = _` — a kernel-level defeq check on a
+  match applied to a *literal* scrutinee reduces by iota regardless of how
+  large the match is, so this stays cheap however many arms exist. Note:
+  `simp only [liftedDef, ...]` alone, without the `show`, commonly leaves
+  "unsolved goals" — simp unfolding a `def` doesn't by itself force a match
+  on a literal scrutinee to reduce the way a kernel defeq check does. Also
+  check for now-unnecessary `set_option maxHeartbeats 0 in` left over from
+  before such a fix — the default budget is often enough once the
+  per-case cost drops.
+- **A goal in a monadic/opaque type (e.g. `Part`, `Option`, a custom monad)
+  resisting `rw`/`simp` directly** is usually not a performance problem per
+  se, but a real time sink while the right lemma set is found — go through
+  the type's `ext` lemma plus its membership lemmas instead of fighting
+  `rw`/`simp` on the raw goal.
+
+======================================================================
+5. Tooling suggestions
+======================================================================
+
+- If the project doesn't already have one, consider a small per-module
+  rebuild-cost script: for every module, its own isolated compile time
+  (using the `lake env printenv LEAN_PATH` + direct `lean` invocation
+  pattern from section 1, not `lake env lean` per file), how many modules
+  transitively depend on it, the total compilation an edit to it would
+  trigger, and the longest downstream chain (a wall-clock floor regardless
+  of core count). Use this to prioritize which files are worth a
+  deep-dive session before spending time on one. Expect this kind of full
+  measurement to take a while on a large project (on the order of an hour
+  for ~100+ modules) — run it on an idle machine and treat it as an
+  occasional audit, not a routine step.
+- If writing any script that mechanically rewrites Lean source (e.g. a
+  batch proof-case rewriter), be tolerant of the source's own inconsistent
+  formatting rather than assuming one indentation/line-break convention:
+  a naive per-line "strip and re-indent" can silently produce a
+  differently-structured file (e.g. merging or splitting match arms
+  incorrectly) whose type errors point far from the real cause. Prefer
+  normalizing each logical unit onto one line before re-emitting it, and
+  splitting on a token/pattern (e.g. the start of a `| ctor args =>` line)
+  rather than an assumed line-offset from it.
+- On Windows specifically: don't select a Python interpreter for build
+  tooling with `command -v python3`/`where python3` — the Microsoft Store
+  app-execution alias can make that check succeed while actually running
+  it only prints an install prompt and exits non-zero. Probe by actually
+  invoking the candidate (e.g. `"$candidate" -c "import sys"`) and falling
+  back from `python3` to `python`.
+- If the project's git hooks run a full `lake build` (e.g. a pre-commit
+  hook), and that build takes more than a couple of minutes, flag that any
+  automation invoking `git commit` in the foreground may hit its own
+  timeout — recommend backgrounding the commit and polling, or moving the
+  full build to a separate pre-push/CI step instead of pre-commit.
+
+======================================================================
+6. Producing the report
+======================================================================
+
+Present the report as a numbered, prioritized list of recommendations,
+ordered per the Priority section above (module system first, then
+file-splitting, then tactic-level fixes, then tooling) and by expected
+impact within each. For each recommendation, cover, in plain language a
+Lean user who isn't a software engineer can follow:
+- **What to do** — the concrete action (which file, which line, which
+  change), spelled out plainly enough to act on without reading this
+  prompt.
+- **Why it helps** — the underlying reason, explained in a sentence or two
+  without assuming prior knowledge of Lake internals, elaboration, or
+  general software-engineering terms. Introduce any term you need
+  (".olean file", "module system", "parallel process") before using it.
+- **Expected benefit** — a number or range if you measured it in this
+  project; otherwise say so explicitly and give the range from this
+  prompt's own findings only as a rough, unverified estimate, clearly
+  labeled as such.
+- **Prerequisites / ordering** — whether this recommendation depends on
+  another one being done first (e.g. re-plan a file split after a module
+  migration), and, for the module system migration specifically, the
+  mandatory bottom-up order and batch-safety check from section 2 — call
+  out explicitly that doing this one out of order can break the build.
+- **Confidence** — flag clearly which recommendations are confirmed by a
+  measurement in *this* project versus still speculative (pattern
+  recognized in the code but not yet measured here).
+
+Also note the toolchain/Lake version anything version-sensitive was checked
+against (e.g. availability of a job-count flag), and the machine/load
+conditions any timing came from.
+
+Prefer few, well-verified, high-impact findings over a long list of
+unverified ones — a claim that was only assumed, not measured, has
+historically been wrong in past audits of this kind.
