@@ -29,10 +29,10 @@ file if you've copied it into your project) and let it run the audit.
 To avoid pasting the prompt every time, hand
 [`InstallationPrompt.txt`](InstallationPrompt.txt) to your AI assistant. It
 asks you whether to install for all your projects or just the current one,
-then creates a small skill (a single `SKILL.md` file, no software) so you can
-run the audit with `/leanperf`. The skill fetches the latest
-`LeanPerformanceAudit.txt` from this repository each time it runs, so it needs
-network access.
+then creates a small skill (two text files, no software) so you can run the
+audit with `/leanperf`. The skill keeps an offline copy of the audit, so it runs
+without network access. Run `/leanperf update` to fetch the latest audit and
+skill from this repository; it shows what changed and asks before overwriting.
 
 ## Contributing
 

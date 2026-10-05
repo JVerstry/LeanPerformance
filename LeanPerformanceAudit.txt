@@ -1,3 +1,5 @@
+LeanPerf audit version: 1
+
 You are auditing a Lean project to find concrete, high-value ways to speed
 up its build. Follow the process below, then produce a report. Ground every
 claim you make in this project's own measurements — do not apply any
