@@ -76,5 +76,8 @@ Reply with a short summary:
   github.com/JVerstry/LeanPerformance, showing what changed and asking for
   confirmation before overwriting, and that /leanperf mode switches between
   local and remote;
+- that /leanperf dry runs a fast read-only audit (no build, nothing measured),
+  and /leanperf schedule sets up a recurring check (weekly and dry by default)
+  if their assistant supports scheduling;
 - that /leanperf uninstall removes the skill (after confirmation), or the user
   can simply delete the folder.

@@ -1,4 +1,4 @@
-LeanPerf audit version: 1
+LeanPerf audit version: 2
 
 You are auditing a Lean project to find concrete, high-value ways to speed
 up its build. Follow the process below, then produce a report. Ground every
@@ -15,6 +15,35 @@ that, on the ranges noted in this prompt (clearly marked as unverified
 estimates, not this project's own numbers). Don't assume they know Lean
 internals (the module system, `.olean` files, elaboration) going in —
 introduce each concept in a sentence before relying on it.
+
+======================================================================
+Run modes: full (default) and dry
+======================================================================
+
+Unless you are told this is a DRY RUN, do a full audit: follow every section
+below, including the measurements.
+
+In a DRY RUN, do not measure anything. Read only:
+- Allowed: reading the project's source files, `lakefile.lean`/`lakefile.toml`,
+  `lean-toolchain`, `lake-manifest.json`, `.gitignore` and git metadata; listing
+  directories; searching file contents; reading file timestamps (including those
+  of existing build output in `.lake/`).
+- Forbidden: `lake build`, `lake env`, `lake update`, `lean`, the profiler, or any
+  other command that compiles, downloads, or writes anything. Even `lake` commands
+  that look harmless may fetch dependencies or rebuild.
+- Spot candidates from the code alone — for example: no use of the module
+  system, files with unusually many importers, very large files or declarations,
+  `decreasing_by` left to the default, `set_option maxHeartbeats 0`, a pre-commit
+  hook that runs a full build, an import graph with a long chain. Rank them by
+  expected impact as usual.
+- Mark every finding "unmeasured": in a dry run nothing is confirmed. Say in the
+  first lines of the report that this is a dry run and nothing was measured, and
+  end the report with the list of measurements a full run would take to confirm
+  the top findings.
+- Give every finding a short stable key of the form `<pattern>: <file or area>`
+  (for example `module-system: whole project`, `default-decreasing-by:
+  Foo/Bar.lean`), reused unchanged whenever the same finding shows up again, so
+  that two reports can be compared mechanically.
 
 ======================================================================
 Priority — what to check and recommend first
@@ -347,6 +376,10 @@ Lean user who isn't a software engineer can follow:
 - **Confidence** — flag clearly which recommendations are confirmed by a
   measurement in *this* project versus still speculative (pattern
   recognized in the code but not yet measured here).
+
+In a dry run, "Expected benefit" can only be the rough, unverified range from
+this prompt, and "Confidence" is always "speculative"; do not present a dry-run
+finding as confirmed.
 
 Also note the toolchain/Lake version anything version-sensitive was checked
 against (e.g. availability of a job-count flag), and the machine/load

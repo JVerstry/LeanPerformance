@@ -53,6 +53,29 @@ local copy if the fetch fails.
 
 You can switch between the two later with `/leanperf mode`.
 
+### Dry runs and weekly checks
+
+A full audit builds and profiles your project, which can take a while and uses
+real CPU time. `/leanperf dry` is the light alternative: it only reads your
+files, never runs `lake` or `lean`, and finishes quickly.
+
+Its findings are leads, not conclusions. Every one is marked "unmeasured", and the
+report ends with the measurements a full run would take to confirm the most
+promising ones.
+
+`/leanperf schedule` sets up a recurring check, weekly and dry by default, using
+your assistant's own scheduler. It asks you to confirm the interval, the kind of
+run, and that reports may be saved in a `.leanperf/` folder (which it adds to your
+`.gitignore`).
+
+Each run compares itself with the previous report and tells you only what is new,
+what is gone and what changed rank, or "No change" if nothing did. A scheduled run
+writes only inside `.leanperf/` and never changes your code.
+
+Scheduling needs an assistant that can run prompts on a schedule, such as Claude
+Code. If yours cannot, the skill says so and stops. Run `/leanperf schedule off`
+to remove the schedule.
+
 ### Updating and removing the skill
 
 Run `/leanperf update` to refresh the local copy of the audit, and the skill
