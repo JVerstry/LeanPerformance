@@ -1,4 +1,4 @@
-LeanPerf audit version: 2
+LeanPerf audit version: 3
 
 You are auditing a Lean project to find concrete, high-value ways to speed
 up its build. Follow the process below, then produce a report. Ground every
@@ -34,8 +34,13 @@ In a DRY RUN, do not measure anything. Read only:
 - Spot candidates from the code alone — for example: no use of the module
   system, files with unusually many importers, very large files or declarations,
   `decreasing_by` left to the default, `set_option maxHeartbeats 0`, a pre-commit
-  hook that runs a full build, an import graph with a long chain. Rank them by
-  expected impact as usual.
+  hook that runs a full build, an import graph with a long chain, a blanket
+  `import Mathlib` (or another whole-library import) where narrow imports would
+  do (section 2b), and the same large tactic block repeated many times in one
+  file (the static sign of the "match unfolded once per case" problem of section
+  4: look for a block of three or more identical lines, once whitespace is
+  normalized, repeated five or more times, or the same `simp only [...]` lemma
+  list repeated ten or more times). Rank them by expected impact as usual.
 - Mark every finding "unmeasured": in a dry run nothing is confirmed. Say in the
   first lines of the report that this is a dry run and nothing was measured, and
   end the report with the list of measurements a full run would take to confirm
@@ -44,6 +49,18 @@ In a DRY RUN, do not measure anything. Read only:
   (for example `module-system: whole project`, `default-decreasing-by:
   Foo/Bar.lean`), reused unchanged whenever the same finding shows up again, so
   that two reports can be compared mechanically.
+
+======================================================================
+Accepted findings
+======================================================================
+
+If the file `.leanperf/accepted.md` exists in the project, read it before you
+start. Each line has the form `<finding key> · <date> · <reason>` and records a
+finding the user has decided to live with. Do not recommend an accepted finding
+again, in either run mode. End the report with one line saying how many accepted
+findings were skipped, so nothing is hidden. If you notice that an accepted
+finding's situation has clearly changed (for example the reason given no longer
+holds), say so and let the user decide; do not remove it yourself.
 
 ======================================================================
 Priority — what to check and recommend first
@@ -66,17 +83,22 @@ report (a numbered, prioritized list of recommendations, not a flat dump):
      before writing it). Doing this out of order is the one recommendation
      in this prompt that can silently corrupt the build rather than merely
      under-deliver — call this out clearly if you recommend it.
-2. **File-splitting for parallelism (section 3)**, but only after
+2. **Import hygiene and prebuilt dependencies (section 2b).** Every file pays
+   the cost of loading everything it imports, and an unnecessary import also
+   widens the rebuild cascade. Trimming imports is low-risk and mechanical, and
+   can matter a lot in a project with many small files, so it comes right after
+   the module system.
+3. **File-splitting for parallelism (section 3)**, but only after
    confirming with a profiler which specific file(s) are actually slow —
    never recommend splitting a file you have not profiled. This depends on
    free CPU cores and free RAM on the machine that will run the build; say
    so, and check both before recommending it.
-3. **Elaboration/tactic-level fixes (section 4)** for the specific slow
+4. **Elaboration/tactic-level fixes (section 4)** for the specific slow
    declarations the profiler points to. These are the most surgical and
    lowest-risk recommendations (they change a handful of lines, not the
    project's structure), but only pay off for the file(s) actually shown
    to be slow — don't apply them speculatively across the whole project.
-4. **Tooling and workflow suggestions (section 5)** — lowest risk, but also
+5. **Tooling and workflow suggestions (section 5)** — lowest risk, but also
    generally the smallest individual payoff; worth doing but not worth
    leading the report with.
 
@@ -97,7 +119,8 @@ needs to rebuild).
   toolchain actually supports instead of assuming.
 - Note whether the project depends on Mathlib (or another large library).
   Mathlib/Batteries import overhead dominates the fixed per-file cost (see
-  section 2) and is not something this project's own code can reduce.
+  section 2). The library's own cost is not something this project can
+  reduce, but how much of it each file loads is: see section 2b.
 - Note the machine you're measuring on (core/thread count, RAM, whether
   it's shared/loaded). Record this in the report: timings are only
   meaningful relative to the machine and load they were taken under.
@@ -229,6 +252,47 @@ Core mechanic to explain and check for in this project:
   is a small win in the other direction.
 
 ======================================================================
+2b. Import hygiene and prebuilt dependencies
+======================================================================
+
+Section 2 explains that every file pays a fixed cost for what it imports, and
+that an edit rebuilds every importer. Both costs shrink if files import only
+what they use.
+
+- **Blanket imports.** A file that imports a whole library (for example
+  `import Mathlib`) loads all of it, however little it uses. Replacing it with
+  the specific modules the file needs lowers that file's load time. Count how
+  many files use a blanket import; if it is most of them, this is a strong
+  candidate. Do not promise a number: measure it (below).
+- **Unused imports.** An import no declaration in the file depends on still
+  costs load time and still triggers a rebuild of the file whenever the imported
+  module changes. A static read cannot tell reliably which imports are unused,
+  so in a dry run flag only blanket imports and files with unusually long import
+  lists, marked unmeasured.
+- **Tools that find them (full run only; check what this toolchain provides
+  before relying on any of it).** `lake shake` is Lake's import-minimization
+  command; run it in its report-only form (never with an option that rewrites
+  files) and read what it lists. For a library that ships its own
+  `#min_imports` command or a minimal-imports linter (Mathlib does), it can be
+  used on a single file. Treat every suggestion as a candidate, and confirm it
+  with a build.
+- **Measure before recommending.** Time an otherwise-empty file that has the
+  same imports as a representative file, then the same file with the narrower
+  imports (use the timing method of section 1). The difference is the saving
+  per file; multiply by the number of files only as a rough upper bound, and say
+  so. Also note the files whose imports sit near the root of the import graph:
+  trimming those shrinks the rebuild cascade as well.
+- **Prebuilt dependencies.** If the project depends on a large library that
+  publishes precompiled build output (Mathlib does, through its cache command),
+  check that developers and CI actually use it instead of compiling the library
+  from source. Look in the project's documentation and CI configuration. If the
+  library has been built from source on this machine, that is a very large,
+  one-time cost, and it is worth saying so plainly. Verify the exact command
+  against the library's own documentation before recommending it.
+- Importing a module that is only needed for notation or a tactic is legitimate:
+  never recommend removing an import without a build proving it is safe.
+
+======================================================================
 3. Splitting large files / proofs for parallelism
 ======================================================================
 
@@ -353,9 +417,9 @@ disproportionately expensive:
 ======================================================================
 
 Present the report as a numbered, prioritized list of recommendations,
-ordered per the Priority section above (module system first, then
-file-splitting, then tactic-level fixes, then tooling) and by expected
-impact within each. For each recommendation, cover, in plain language a
+ordered per the Priority section above (module system first, then import
+hygiene, then file-splitting, then tactic-level fixes, then tooling) and by
+expected impact within each. For each recommendation, cover, in plain language a
 Lean user who isn't a software engineer can follow:
 - **What to do** — the concrete action (which file, which line, which
   change), spelled out plainly enough to act on without reading this
@@ -388,3 +452,58 @@ conditions any timing came from.
 Prefer few, well-verified, high-impact findings over a long list of
 unverified ones — a claim that was only assumed, not measured, has
 historically been wrong in past audits of this kind.
+
+End every report with a short "What this audit does not cover" list, so the
+reader knows where its limits are:
+- whether proofs are correct (the build itself checks that);
+- code style, naming and documentation conventions, and compliance with a
+  library's contribution rules (a separate check covers these);
+- duplicated code, Mathlib or library lemmas that could replace local ones, and
+  dead code, except where they are directly tied to a build-time finding;
+- CI configuration and hardware, except for the prebuilt-dependency check of
+  section 2b;
+- anything this run's mode could not measure (in a dry run, everything).
+
+======================================================================
+7. Applying changes (only when told to apply)
+======================================================================
+
+Everything above is report-only. Follow this section only when the user has
+explicitly asked you to apply a recommendation, and say so at the start. It
+applies one batch at a time; never chain batches without being asked again.
+
+Before changing anything:
+- Name the single recommendation you will apply and describe the batch in
+  plain language: which files, what change. Only low-risk, mechanical batches
+  qualify, such as trimming imports in a set of files, adding an explicit
+  `decreasing_by`, moving a lemma to another file and updating its users, a
+  file split computed as in section 3, or one dependency level of a
+  module-system migration (with its pre-flight check from section 2). Never
+  weaken a statement, change what a definition means, delete a proof, or touch
+  anything outside the batch.
+- Check git. Note the current commit, and stop and ask if any file the batch
+  would touch already has uncommitted changes: a revert must never discard the
+  user's own work.
+- Measure the baseline for exactly what the batch is meant to improve (a file's
+  compile time, the full build time, the cost of an edit), at least twice so you
+  know the run-to-run noise (section 1), and note the number of build warnings.
+
+Then:
+1. Make the change.
+2. Gate: run the full build. It must succeed and produce no new warnings.
+3. Measure the same quantity again, the same way.
+4. Keep the batch only if the improvement is clearly larger than the noise you
+   saw at baseline. Otherwise revert it, restoring only the files the batch
+   touched from git, and record it as "no measurable gain". If the gate failed
+   and the cause is not obvious and quick to fix, revert too.
+5. Record the batch, whether kept or reverted, in `.leanperf/apply-log.md`
+   (create the folder and the file if needed; ask before adding `.leanperf/` to
+   the project's `.gitignore`): date, what was done, the files, the before and
+   after numbers, and kept or reverted.
+6. Leave kept changes uncommitted in the working tree for the user to review.
+   Never commit, never push.
+7. Stop. Report what happened in plain language, and ask whether to apply the
+   next recommendation.
+
+A build that was killed halfway may force a spurious full rebuild later even
+after a revert (section 1); do not mistake that for a measured regression.

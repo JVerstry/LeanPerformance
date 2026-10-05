@@ -16,6 +16,11 @@ for these kinds of issues.
 The assistant reports back a prioritized, plain-language list of concrete fixes,
 grounded in measurements taken on your own project rather than assumptions.
 
+A second prompt, [`LeanStructureAudit.txt`](LeanStructureAudit.txt), is a
+read-only check of your code's structure and style against the conventions of
+Mathlib or CSLib: naming, documentation, layout and imports. It runs nothing and
+changes nothing.
+
 ## No installation package
 
 There is nothing to install and no package to add as a dependency. The audit is
@@ -32,11 +37,14 @@ directory. Paste the contents of `LeanPerformanceAudit.txt` as your prompt, or
 copy the file into your project and ask the assistant to read it. Then let it
 run the audit.
 
+For the structure check, do the same with `LeanStructureAudit.txt` and tell the
+assistant which profile to use, `mathlib` (the default) or `cslib`.
+
 ### Option 2: install it as a skill
 
 To avoid pasting the prompt every time, hand
 [`InstallationPrompt.txt`](InstallationPrompt.txt) to your AI assistant. It
-creates a small skill (three text files, plus an optional fourth if you connect a
+creates a small skill (four text files, plus an optional fifth if you connect a
 papercuts log, no software) so that you can run the audit afterwards with
 `/leanperf`.
 
@@ -49,12 +57,12 @@ The assistant asks you two questions first:
 - **Scope**: install for all your projects, or only for the current one.
 - **Audit source**: where the skill gets the audit text when it runs.
 
-For the audit source, *local* means the skill runs from a copy of the audit saved
-in its own folder. It works offline and gives reproducible results.
+For the audit source, *local* means the skill runs from copies of the audit texts
+saved in its own folder. It works offline and gives reproducible results.
 
-*Remote* means the skill fetches the latest audit from this repository on every
-run. It is always current but needs network access, and it falls back to the
-local copy if the fetch fails.
+*Remote* means the skill fetches the latest audit texts from this repository on
+every run. It is always current but needs network access, and it falls back to
+the local copies if the fetch fails.
 
 You can switch between the two later with `/leanperf mode`.
 
@@ -77,9 +85,54 @@ Each run compares itself with the previous report and tells you only what is new
 what is gone and what changed rank, or "No change" if nothing did. A scheduled run
 writes only inside `.leanperf/` and never changes your code.
 
+To keep scheduled runs cheap, each one looks at the files changed since the last
+report, plus one older top-level directory in rotation, so the whole project is
+covered over time. The first run covers everything.
+
 Scheduling needs an assistant that can run prompts on a schedule, such as Claude
 Code. If yours cannot, the skill says so and stops. Run `/leanperf schedule off`
 to remove the schedule.
+
+### Checking structure and style
+
+`/leanperf structure` checks your code against a library's conventions without
+running anything. Use `/leanperf structure cslib` for CSLib; the default profile
+is Mathlib. Add `internal` to also check rules that apply to Mathlib itself, such
+as its copyright header, which are off by default because they rarely fit a
+project that merely uses it.
+
+Many of these checks also exist as linters that run on every build. Where your
+project already switches a linter on, the skill skips its own check, so you are
+not told the same thing twice. Where a linter is off, the skill runs the check
+itself and recommends switching the linter on, which gives you the earliest
+warning.
+
+The check is advice, graded by how objective each rule is: mechanical rules such
+as line length are reported as findings, while judgement calls are reported as
+"consider". Things that need real understanding, such as whether a lemma is named
+well or an API is well designed, are not checked at all.
+
+### Applying a recommendation
+
+A report never changes your code. When you want a recommendation applied, run
+`/leanperf apply`. It applies one low-risk batch at a time: it measures the
+baseline twice, makes the change, requires a full build with no new warnings, and
+measures again. It keeps the change only if the improvement is clearly larger
+than the measurement noise; otherwise it reverts, restoring only the files it
+touched.
+
+Every batch, kept or reverted, is recorded in `.leanperf/apply-log.md`. Kept
+changes are left uncommitted for you to review. It never commits and never
+pushes, and it stops after each batch to ask whether to continue.
+
+### Accepting findings
+
+If you decide to live with a finding, run `/leanperf accept <key> <reason>` with
+the key shown in the report, for example `module-system: whole project`. It is
+recorded in `.leanperf/accepted.md`, kept on your machine and not in your
+repository, and the finding is not reported again. Reports say how many accepted
+findings they skipped, so nothing is hidden. `/leanperf accept list` shows the
+list, and `/leanperf accept remove <key>` removes an entry.
 
 ### Logging findings to a papercuts log
 
@@ -95,8 +148,8 @@ confirm. Dry runs and scheduled runs never write to the log.
 
 ### Updating and removing the skill
 
-Run `/leanperf update` to refresh the local copy of the audit, and the skill
-itself, from this repository. It shows what changed and asks for your
+Run `/leanperf update` to refresh the local copies of the audit texts, and the
+skill itself, from this repository. It shows what changed and asks for your
 confirmation before overwriting anything.
 
 To remove the skill, run `/leanperf uninstall`, which also asks for confirmation.

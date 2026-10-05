@@ -1,0 +1,190 @@
+LeanPerf structure version: 1
+
+You are checking a Lean project's code structure and style against the
+conventions of a well-known Lean library, and reporting where it departs from
+them. This is a read-only check: do not run `lake`, `lean` or any command that
+compiles, downloads or writes anything. Read files and search them only (source
+files, `lakefile.lean`/`lakefile.toml`, `lean-toolchain`, `lake-manifest.json`,
+`.gitignore`, git metadata, directory listings).
+
+The person reading your report knows Lean and mathematics but is not a software
+engineer. For every kind of finding, say in plain language what the convention
+is and why a library cares about it. Never present a style preference as an
+error: this report is advice, graded by how objective each rule is.
+
+======================================================================
+Profiles
+======================================================================
+
+You are told which profile to use: `mathlib` (the default) or `cslib`. You may
+also be told `internal`, which switches on the Mathlib-internal rules marked
+[internal] below; they are off otherwise, because they apply to Mathlib itself
+and rarely to a project that merely uses it.
+
+- `mathlib`: the Mathlib style guide, naming conventions and documentation
+  rules, and Mathlib's linters.
+- `cslib`: everything in `mathlib`, plus the CSLib additions in section C, with
+  the CSLib relaxations noted there.
+
+Say at the top of the report which profile you used and that nothing was
+measured or run.
+
+======================================================================
+Native linters come first (avoid doing twice what the project already does)
+======================================================================
+
+Many of the checks below are also implemented as linters by the library
+itself, which run on every build. Where the project already runs the native
+linter, the project is told about every violation each time it builds, so
+repeating the check here would only duplicate it.
+
+For each check below that names a native linter:
+1. Look in the project's `lakefile.lean` / `lakefile.toml` for the linter being
+   switched on (an option such as `linter.style.longLine`, a set such as
+   `linter.mathlibStandardSet`, a `lintDriver`, or a style-lint executable).
+   Also note if the project's own source files switch it on or off with
+   `set_option`.
+2. If it is on, skip your own check and list the check under "Covered by your
+   own linters".
+3. If it is off, or you cannot tell, run the check yourself, and add one finding
+   (not one per violation) recommending that the project switch the native
+   linter on, because that gives the earliest warning, on every build. Give the
+   option name only where this prompt names it; otherwise say to look in the
+   library's linter documentation. Never guess an option name.
+
+======================================================================
+Checks (profile mathlib)
+======================================================================
+
+Each check has an id, a rule, and the native linter that covers it, if any.
+Report violations as findings with the key `structure/<id>: <file or area>`,
+reused unchanged whenever the same finding shows up again. List at most ten
+locations per check and give the total count, so a project with thousands of
+violations gets a usable report.
+
+Mechanical (objective; report as findings):
+
+- M1 Lines longer than 100 characters; lines containing a URL are exempt.
+  Native: the longLine style linter (option `linter.style.longLine`).
+- M3 Trailing whitespace; a space before a semicolon. Native: Mathlib's
+  text-based style linters, run by its `lint-style` executable.
+- M4 Empty lines inside a declaration. Native: a style linter, name not
+  verified; look in the library's linter documentation.
+- M5 `λ` written instead of `fun`; `$` instead of `<|`; a focusing dot typed `.`
+  instead of `·`; a `·` alone on its line. Native: the lambdaSyntax,
+  dollarSyntax and cdot style linters.
+- M7 `open Classical` that is not scoped. Native: the openClassical style
+  linter.
+- M8 A `section` or `namespace` that is never closed (the outermost
+  `noncomputable section` is allowed). Native: the missingEnd style linter.
+- M9 A module (file) name that is not UpperCamelCase, that contains one of
+  `* ? ! . '`, or that is a name Windows forbids (CON, PRN, AUX, NUL, COM1 to
+  COM9, LPT1 to LPT9). Native: the text-based module-name linters.
+- M10 A character outside the library's Unicode allow-list, or an invisible or
+  direction-changing character; the text "Adaptation note:" instead of the
+  `#adaptation_note` command. Native: the text-based Unicode and adaptation
+  note linters. You cannot see the allow-list: flag only invisible and
+  direction-changing characters, and say the full check needs the native linter.
+- M11 [internal] File header: a first line `/-`, a second line starting
+  `Copyright (c) 20` and ending `. All rights reserved.`, the license line,
+  `Authors:` without a final period and without the word "and", the imports
+  straight after it, then a module docstring as the first non-import command; no
+  import of `Mathlib.Tactic` and none from `Lake`. Native: the header linter
+  (option `linter.style.header`).
+- M12 Import layout: the `module` keyword alone on its line after the header,
+  then the `public import` lines grouped, then the `import` lines grouped, each
+  group in alphabetical order. No native linter known.
+- M14 `@[deprecated]` without `(since := "YYYY-MM-DD")`; a deprecated
+  declaration whose date is more than six months old (the guide says to delete
+  those). Native: the deprecatedNoSince linter, run with `lake lint`.
+- M15 Missing documentation: a `def`, `structure`, `class`, `inductive` or
+  `instance` with no `/-- -/` docstring; a field of a class or structure with no
+  docstring; a file with no module docstring (`/-! # Title` with a summary); a
+  docstring that is a complete sentence not ending in a period; module docstring
+  headings out of the order Main definitions, Main statements, Notation,
+  Implementation notes, References, Tags. Native: the docBlame environment
+  linter (definitions) and docBlameThm (theorems, off by default), run with
+  `lake lint`.
+
+Judgement (reasonably clear but report as "consider", not as errors):
+
+- M13 Names. Theorems in snake_case; types, structures, classes and Props in
+  UpperCamelCase; other terms in lowerCamelCase; no double underscores; a
+  Prop-valued class named after a noun carries the `Is` prefix; American
+  spelling. Native: the nameCheck style linter covers only double underscores
+  and non-standard forms; the rest comes from the naming guide, not a linter.
+  Spelling: use a short word list only (for example "factorisation",
+  "behaviour", "normalise") and say it is partial.
+- M16 Layout: declarations and commands flush-left and namespaces not indented;
+  `by` at the end of the statement line, never alone on its line; proof lines
+  indented two spaces, the continuation of a long statement four; spaces around
+  `:`, `:=` and infix operators; one blank line between declarations. No native
+  linter known.
+- M17 Statement shape: a conjunction used as a hypothesis or as a conclusion;
+  a disjunction used as a hypothesis; arguments after the colon that could stand
+  before it; arguments or return types left implicit. No native linter known.
+  Many projects have good reasons to differ: report as "consider".
+
+Handled by the build-time audit, not here: file length, `set_option
+maxHeartbeats`, `irreducible_def`, and import minimization. Do not report them;
+if you notice one, say that `/leanperf dry` covers it.
+
+Not checked at all, because they need judgement a text search cannot give:
+naming semantics (`of`, `_left`/`_right`, `_apply`, `map_`), normal forms (for
+example `s.Nonempty` over `∃ x, x ∈ s`), mathematical generality and API design.
+Do not report any of these.
+
+======================================================================
+C. Additions and relaxations for profile cslib
+======================================================================
+
+- C1 Every file imports the project's `Init` module (CSLib's own check is
+  `lake exe checkInitImports`). Find the project's `Init` module by name; if it
+  has none, say the rule does not apply.
+- C2 The root module imports every other file of the library (CSLib's own check
+  is `lake exe mk_all`). List the files that the root module does not import.
+- C3 Every definition and every theorem has a docstring: stricter than M15,
+  which makes docstrings on theorems optional.
+- C4 Relaxation: domain-specific variable names are acceptable, so report
+  variable naming at most as an observation.
+- C5 Advisory only, never a finding: notation kept locally scoped or backed by a
+  typeclass, and reuse of existing abstractions.
+
+======================================================================
+Commits (both profiles)
+======================================================================
+
+- P1 The subjects of the last fifty commits (read them from git) follow
+  `<type>(<optional scope>): <subject>`, where the type is one of feat, fix, doc,
+  style, refactor, test, chore, perf (and ci for `mathlib`), the subject is
+  lowercase, in the imperative, with no trailing period. Report the count that
+  deviate and three examples. Tell the reader this is a convention for
+  contributing to the library, and that it does not matter for a private
+  project.
+
+======================================================================
+What the project's own tools could add (do not run them; recommend them)
+======================================================================
+
+You may not run anything, but you can say which tool would give a fuller answer
+if the project has it: `lake lint` (environment linters such as docBlame,
+unusedArguments and dupNamespace), the style-lint executable, `lake build` with
+warnings treated as failures (`--wfail`), and `lake shake` for imports. Name
+them as follow-ups only.
+
+======================================================================
+Report
+======================================================================
+
+1. Profile used, and the statement that nothing was measured or run.
+2. "Covered by your own linters": the checks you skipped for that reason.
+3. Findings, grouped by check id, most objective first (mechanical before
+   judgement), each with the key, the count, up to ten locations, and the plain
+   language reason the convention exists.
+4. Recommendations to switch on native linters, one per linter.
+5. "What this check does not cover": naming semantics, normal forms, API design,
+   proof correctness, and anything marked [internal] when `internal` was not
+   given.
+
+If `.leanperf/accepted.md` exists, read it first and skip every finding whose
+key is listed there; say how many were skipped.
