@@ -1,6 +1,6 @@
 You are installing LeanPerf, a skill that audits a Lean project's build time
 and recommends concrete, prioritized ways to speed it up. Follow these steps.
-This installs two small text files into a skill folder — no software, no
+This installs three small text files into a skill folder — no software, no
 dependency, and nothing in the Lean project's build is changed.
 
 ======================================================================
@@ -27,6 +27,18 @@ Ask the user which they want, and wait for the answer:
   collaborators through git. Claude Code folder: .claude/skills/leanperf/
   at the project root.
 
+Then ask which audit source the skill should use when it runs, and wait for the
+answer:
+
+- Local (recommended): the skill runs from a copy of the audit saved in its
+  folder. Works offline and gives reproducible results; the copy changes only
+  when the user runs /leanperf update.
+- Remote: the skill fetches the latest audit from the LeanPerformance repository
+  on every run. Always current, but needs network access (it falls back to the
+  local copy if the fetch fails).
+
+The user can switch later with /leanperf mode.
+
 If a leanperf folder already exists there, tell the user and ask whether to
 replace it before overwriting anything.
 
@@ -34,8 +46,10 @@ replace it before overwriting anything.
 3. Create the skill
 ======================================================================
 
-Create the folder chosen above, then download these two files into it, saving
-each exactly as published (do not edit, summarize or reformat them):
+Create the folder chosen above. Write a file named mode.txt in it containing
+exactly one word: local or remote, as the user chose. Then download these two
+files into it, saving each exactly as published (do not edit, summarize or
+reformat them):
 
 - https://raw.githubusercontent.com/JVerstry/LeanPerformance/main/skill/SKILL.md
   saved as SKILL.md
@@ -53,11 +67,14 @@ them while installing.
 ======================================================================
 
 Reply with a short summary:
-- the exact folder you created and the two files in it;
+- the exact folder you created and the three files in it (SKILL.md, audit.txt,
+  mode.txt), and which audit source (local or remote) the user chose;
 - how to use it: type /leanperf inside their Lean project, or ask the assistant
   to audit the project's build time (some assistants need a restart or a new
   session before a new skill shows up);
-- that the audit runs from the local copy (audit.txt), so it works offline, and
-  that /leanperf update fetches the latest audit and skill from
+- that /leanperf update fetches the latest audit and skill from
   github.com/JVerstry/LeanPerformance, showing what changed and asking for
-  confirmation before overwriting.
+  confirmation before overwriting, and that /leanperf mode switches between
+  local and remote;
+- that /leanperf uninstall removes the skill (after confirmation), or the user
+  can simply delete the folder.
