@@ -3,14 +3,14 @@ name: leanperf
 description: Audit a Lean/Lake project's build time and code structure and recommend prioritized fixes. Use when the user types /leanperf (or /leanperf dry, structure, apply, accept, schedule, papercuts, update, mode, uninstall) or asks to audit, profile or speed up the build of a Lean project, or to check it against Mathlib or CSLib conventions.
 ---
 
-LeanPerf skill version: 6
+LeanPerf skill version: 7
 
 # /leanperf — audit a Lean project's build time and structure
 
 This folder holds these files:
 
 - this `SKILL.md`;
-- `audit.txt`, a local copy of `LeanPerformanceAudit.txt` from the LeanPerformance
+- `audit.txt`, a local copy of `LeanPerformanceAudit.txt` from the LeanSkills
   repository (its first line states its version);
 - `structure.txt`, a local copy of `LeanStructureAudit.txt` (first line: version);
 - `mode.txt`, one word, `local` or `remote`, chosen at install time (missing means
@@ -20,9 +20,9 @@ This folder holds these files:
 
 Published sources (the only network locations this skill uses):
 
-- https://raw.githubusercontent.com/JVerstry/LeanPerformance/main/LeanPerformanceAudit.txt
-- https://raw.githubusercontent.com/JVerstry/LeanPerformance/main/LeanStructureAudit.txt
-- https://raw.githubusercontent.com/JVerstry/LeanPerformance/main/skill/SKILL.md
+- https://raw.githubusercontent.com/JVerstry/LeanSkills/main/LeanPerformance/LeanPerformanceAudit.txt
+- https://raw.githubusercontent.com/JVerstry/LeanSkills/main/LeanPerformance/LeanStructureAudit.txt
+- https://raw.githubusercontent.com/JVerstry/LeanSkills/main/LeanPerformance/skill/SKILL.md
 
 ## Getting the text of an audit
 

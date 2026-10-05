@@ -2,10 +2,13 @@
 
 A free audit prompt to accelerate Lean code build time.
 
-> **Moving:** LeanPerformance is being merged into
-> [LeanSkills](https://github.com/JVerstry/LeanSkills), where development will
-> continue. This repository stays online, and skills already installed keep
-> working, because they fetch their audit text from the files here.
+> **Moved:** LeanPerformance now lives in
+> [LeanSkills](https://github.com/JVerstry/LeanSkills), in the `LeanPerformance/`
+> folder, with its manual at
+> [`LeanPerformance/MANUAL.md`](https://github.com/JVerstry/LeanSkills/blob/main/LeanPerformance/MANUAL.md).
+> Development and issues continue there. This repository stays online and frozen,
+> because skills installed earlier fetch their first update from the files here;
+> that update repoints them to LeanSkills.
 
 ## Purpose
 

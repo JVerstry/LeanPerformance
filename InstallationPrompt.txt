@@ -34,7 +34,7 @@ answer:
 - Local (recommended): the skill runs from copies of the audit texts saved in its
   folder. Works offline and gives reproducible results; the copies change only
   when the user runs /leanperf update.
-- Remote: the skill fetches the latest audit texts from the LeanPerformance
+- Remote: the skill fetches the latest audit texts from the LeanSkills
   repository on every run. Always current, but needs network access (it falls
   back to the local copies if the fetch fails).
 
@@ -52,11 +52,11 @@ exactly one word: local or remote, as the user chose. Then download these three
 files into it, saving each exactly as published (do not edit, summarize or
 reformat them):
 
-- https://raw.githubusercontent.com/JVerstry/LeanPerformance/main/skill/SKILL.md
+- https://raw.githubusercontent.com/JVerstry/LeanSkills/main/LeanPerformance/skill/SKILL.md
   saved as SKILL.md
-- https://raw.githubusercontent.com/JVerstry/LeanPerformance/main/LeanPerformanceAudit.txt
+- https://raw.githubusercontent.com/JVerstry/LeanSkills/main/LeanPerformance/LeanPerformanceAudit.txt
   saved as audit.txt
-- https://raw.githubusercontent.com/JVerstry/LeanPerformance/main/LeanStructureAudit.txt
+- https://raw.githubusercontent.com/JVerstry/LeanSkills/main/LeanPerformance/LeanStructureAudit.txt
   saved as structure.txt
 
 If any download fails, create nothing, tell the user, and suggest pasting the
@@ -77,7 +77,7 @@ Reply with a short summary:
   to audit the project's build time (some assistants need a restart or a new
   session before a new skill shows up);
 - that /leanperf update fetches the latest audit and skill from
-  github.com/JVerstry/LeanPerformance, showing what changed and asking for
+  github.com/JVerstry/LeanSkills (LeanPerformance/ folder), showing what changed and asking for
   confirmation before overwriting, and that /leanperf mode switches between
   local and remote;
 - that /leanperf dry runs a fast read-only audit (no build, nothing measured),
