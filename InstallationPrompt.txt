@@ -79,5 +79,8 @@ Reply with a short summary:
 - that /leanperf dry runs a fast read-only audit (no build, nothing measured),
   and /leanperf schedule sets up a recurring check (weekly and dry by default)
   if their assistant supports scheduling;
+- that, if they keep a papercuts log (a text file of tooling friction, one line
+  per entry), /leanperf papercuts <path> lets the skill offer to log its
+  measured, general findings there after an audit, after confirmation;
 - that /leanperf uninstall removes the skill (after confirmation), or the user
   can simply delete the folder.

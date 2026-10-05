@@ -1,16 +1,18 @@
 ---
 name: leanperf
-description: Audit a Lean/Lake project's build time and recommend prioritized fixes. Use when the user types /leanperf (or /leanperf dry, /leanperf schedule, /leanperf update, /leanperf mode, /leanperf uninstall) or asks to audit, profile or speed up the build of a Lean project.
+description: Audit a Lean/Lake project's build time and recommend prioritized fixes. Use when the user types /leanperf (or /leanperf dry, /leanperf schedule, /leanperf papercuts, /leanperf update, /leanperf mode, /leanperf uninstall) or asks to audit, profile or speed up the build of a Lean project.
 ---
 
-LeanPerf skill version: 4
+LeanPerf skill version: 5
 
 # /leanperf — audit a Lean project's build time
 
 This folder holds three files: this `SKILL.md`; `audit.txt`, a local copy of
 `LeanPerformanceAudit.txt` from the LeanPerformance repository (its first line states
 its version); and `mode.txt`, containing one word, `local` or `remote`, chosen at
-install time. If `mode.txt` is missing, treat it as `local`.
+install time. If `mode.txt` is missing, treat it as `local`. An optional fourth file,
+`papercuts.txt`, holds the path of the user's papercuts log (see `/leanperf papercuts`);
+when it is missing, nothing is ever written to a papercuts log.
 
 Published sources (the only network locations this skill uses):
 
@@ -30,6 +32,25 @@ Published sources (the only network locations this skill uses):
    used and whether it came from the local copy or the repository.
 3. Report first. Do not modify the user's files, or run a change the audit
    recommends, until the user says to go ahead.
+4. If `papercuts.txt` exists, after the report follow `/leanperf papercuts` below
+   to offer logging the findings that qualify.
+
+## `/leanperf papercuts` — log findings to a papercuts log (optional)
+
+A papercuts log is a plain text file where a developer records tooling friction that
+could recur in any project, one line per entry: `date · symptom · fix · project`.
+
+- `/leanperf papercuts <path>` stores that path in `papercuts.txt` (after checking
+  the file exists, or asking before creating it); `/leanperf papercuts off` deletes
+  `papercuts.txt`; plain `/leanperf papercuts` says what is configured.
+- After a full audit, offer to log only findings that were **measured in this
+  project** and are **general** lessons (a Lake or Lean behavior, a tooling quirk),
+  not project-specific proof details. Dry-run findings are unmeasured and are never
+  logged.
+- Show the exact lines you propose, say how many, and append them only after the
+  user confirms. Never rewrite or delete existing lines, and skip a finding whose
+  symptom is already logged.
+- A scheduled run never writes to the papercuts log.
 
 ## `/leanperf dry` — read-only audit
 
@@ -94,8 +115,9 @@ back to `audit.txt` if the fetch fails). If the user names a mode
    Say that nothing in their Lean project is affected. If the current project has
    a recurring `/leanperf` task, tell the user and offer to remove it too (see
    `/leanperf schedule off`).
-2. On confirmation, delete only `SKILL.md`, `audit.txt` and `mode.txt` in this
-   folder, then remove the folder itself if it is now empty. If it holds any other
+2. On confirmation, delete only `SKILL.md`, `audit.txt`, `mode.txt` and
+   `papercuts.txt` (if present) in this folder (the papercuts log itself is never
+   touched), then remove the folder itself if it is now empty. If it holds any other
    file, leave that file and the folder in place and tell the user.
 3. Confirm what was removed. The skill disappears from the assistant on its next
    session or restart. Any `.leanperf/` report folder in a project is left alone.

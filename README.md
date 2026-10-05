@@ -36,8 +36,13 @@ run the audit.
 
 To avoid pasting the prompt every time, hand
 [`InstallationPrompt.txt`](InstallationPrompt.txt) to your AI assistant. It
-creates a small skill (three text files, no software) so that you can run the
-audit afterwards with `/leanperf`.
+creates a small skill (three text files, plus an optional fourth if you connect a
+papercuts log, no software) so that you can run the audit afterwards with
+`/leanperf`.
+
+Running `/leanperf` on its own performs the full audit: it builds and profiles
+your project to measure where the time goes, then reports prioritized fixes. The
+other modes below are variations on it.
 
 The assistant asks you two questions first:
 
@@ -75,6 +80,18 @@ writes only inside `.leanperf/` and never changes your code.
 Scheduling needs an assistant that can run prompts on a schedule, such as Claude
 Code. If yours cannot, the skill says so and stops. Run `/leanperf schedule off`
 to remove the schedule.
+
+### Logging findings to a papercuts log
+
+If you keep a papercuts log, a plain text file where you note tooling friction one
+line at a time (`date · symptom · fix · project`), `/leanperf papercuts <path>`
+connects it to the skill. It is off until you set it, and `/leanperf papercuts off`
+disconnects it.
+
+After a full audit, the skill then proposes log lines only for findings that were
+measured in your project and are general lessons about Lean or Lake, not details of
+your own proofs. It shows you the exact lines and appends them only once you
+confirm. Dry runs and scheduled runs never write to the log.
 
 ### Updating and removing the skill
 
