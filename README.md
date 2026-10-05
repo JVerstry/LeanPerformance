@@ -24,6 +24,16 @@ assistant open in your Lean project's directory, paste the contents of
 `LeanPerformanceAudit.txt` as your prompt (or ask the assistant to read the
 file if you've copied it into your project) and let it run the audit.
 
+### Optional: install it as a skill
+
+To avoid pasting the prompt every time, hand
+[`InstallationPrompt.txt`](InstallationPrompt.txt) to your AI assistant. It
+asks you whether to install for all your projects or just the current one,
+then creates a small skill (a single `SKILL.md` file, no software) so you can
+run the audit with `/leanperf`. The skill fetches the latest
+`LeanPerformanceAudit.txt` from this repository each time it runs, so it needs
+network access.
+
 ## Contributing
 
 Contributing (submitting changes to the audit prompt) is limited to this
