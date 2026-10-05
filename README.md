@@ -2,6 +2,11 @@
 
 A free audit prompt to accelerate Lean code build time.
 
+> **Moving:** LeanPerformance is being merged into
+> [LeanSkills](https://github.com/JVerstry/LeanSkills), where development will
+> continue. This repository stays online, and skills already installed keep
+> working, because they fetch their audit text from the files here.
+
 ## Purpose
 
 Lean/Lake build times can balloon in ways that aren't obvious from reading the
